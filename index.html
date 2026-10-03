@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in with Puter</title>
+  <script src="https://js.puter.com/v2/"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --paper: #f6f1e7;
+      --ink: #2c2416;
+      --accent: #8c4a2f;
+      --muted: #6d6256;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #1c1814;
+        --ink: #f6f1e7;
+        --accent: #e0a07a;
+        --muted: #cbbba8;
+      }
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Georgia, "Iowan Old Style", Palatino, serif;
+      background: var(--paper);
+      color: var(--ink);
+    }
+    main {
+      max-width: 28rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin: 0 0 0.75rem;
+    }
+    p {
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    button {
+      font: inherit;
+      border-radius: 999px;
+      padding: 0.85rem 1.2rem;
+      border: 0;
+      cursor: pointer;
+    }
+    #continue {
+      background: var(--accent);
+      color: #fff;
+      width: 100%;
+    }
+    #cancel {
+      margin-top: 0.75rem;
+      width: 100%;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--muted);
+    }
+    #status {
+      min-height: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Sign in with Puter</h1>
+    <p id="lead"></p>
+    <button id="continue" type="button">Continue with Puter</button>
+    <button id="cancel" type="button">Cancel</button>
+    <p id="status" role="status"></p>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const reason = params.get("reason");
+    const lead = document.getElementById("lead");
+    if (reason === "credit") {
+      lead.textContent =
+        "This Puter account is out of credit. Sign in with another account, or add credit in the Puter window, then continue.";
+    } else if (reason === "rejected") {
+      lead.textContent =
+        "Puter did not accept the saved sign-in. Sign in again to continue.";
+    } else {
+      lead.textContent =
+        "Recaps run on your Puter account, so they do not cost the app developer. Puter will ask you to sign in with Google, Microsoft, Apple, or email.";
+    }
+
+    function send(message) {
+      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+        window.flutter_inappwebview.callHandler("puterAuth", message);
+        return;
+      }
+      if (window.PuterAuth && window.PuterAuth.postMessage) {
+        window.PuterAuth.postMessage(JSON.stringify(message));
+      }
+    }
+
+    document.getElementById("cancel").addEventListener("click", function () {
+      send({ type: "cancel" });
+    });
+
+    document.getElementById("continue").addEventListener("click", async function () {
+      const status = document.getElementById("status");
+      status.textContent = "Opening Puter...";
+      const button = document.getElementById("continue");
+      button.disabled = true;
+      try {
+        const options =
+          reason === "credit" || reason === "rejected"
+            ? { request_auth: true }
+            : {};
+        await puter.auth.signIn(options);
+        const token = puter.authToken;
+        if (!token) {
+          status.textContent = "Puter did not return a sign-in token. Try again.";
+          return;
+        }
+        status.textContent = "Signed in. Returning to the app...";
+        send({ type: "token", token: token });
+      } catch (err) {
+        const code = err && (err.error || err.code);
+        if (code === "auth_window_closed") {
+          status.textContent = "Sign-in window closed. You can try again.";
+          return;
+        }
+        const message =
+          (err && (err.msg || err.message)) || "Sign-in failed. Try again.";
+        status.textContent = String(message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
